@@ -14,6 +14,7 @@ const CATEGORIES = [
 
 type Category = (typeof CATEGORIES)[number];
 type CategoryFilter = Category | "All" | "Trending";
+type SortBy = "rank" | "newest" | "bids";
 
 const TRENDING_WINDOW_MS = 24 * 60 * 60 * 1000;
 
@@ -32,6 +33,7 @@ type Podcast = {
   cover_image?: string | null;
   image_url?: string | null;
   cover_url?: string | null;
+  created_at?: string | null;
 };
 
 type Bid = {
@@ -50,6 +52,7 @@ type RankedPodcast = {
   coverImage: string | null;
   totalBids: number;
   trendingBids: number;
+  createdAt: number;
 };
 
 function podcastName(podcast: Podcast) {
@@ -75,10 +78,14 @@ function podcastCover(podcast: Podcast) {
   );
 }
 
-function bidTimestamp(bid: Bid) {
-  if (!bid.created_at) return 0;
-  const timestamp = Date.parse(bid.created_at);
+function parseTimestamp(value?: string | null) {
+  if (!value) return 0;
+  const timestamp = Date.parse(value);
   return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function bidTimestamp(bid: Bid) {
+  return parseTimestamp(bid.created_at);
 }
 
 function formatUsd(amount: number) {
@@ -122,15 +129,40 @@ export default function Home() {
   const [podcasts, setPodcasts] = useState<RankedPodcast[]>([]);
   const [selectedCategory, setSelectedCategory] =
     useState<CategoryFilter>("All");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortBy, setSortBy] = useState<SortBy>("rank");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const visiblePodcasts =
-    selectedCategory === "Trending"
-      ? [...podcasts].sort((a, b) => b.trendingBids - a.trendingBids)
-      : selectedCategory === "All"
-        ? podcasts
-        : podcasts.filter((podcast) => podcast.category === selectedCategory);
+  const query = searchTerm.trim().toLowerCase();
+  const visiblePodcasts = podcasts
+    .filter((podcast) => {
+      if (
+        selectedCategory !== "All" &&
+        selectedCategory !== "Trending" &&
+        podcast.category !== selectedCategory
+      ) {
+        return false;
+      }
+
+      if (!query) return true;
+
+      return (
+        podcast.name.toLowerCase().includes(query) ||
+        podcast.description.toLowerCase().includes(query)
+      );
+    })
+    .sort((a, b) => {
+      if (selectedCategory === "Trending" && sortBy === "rank") {
+        return b.trendingBids - a.trendingBids;
+      }
+
+      if (sortBy === "newest") {
+        return b.createdAt - a.createdAt;
+      }
+
+      return b.totalBids - a.totalBids;
+    });
 
   const leaderboardTitle =
     selectedCategory === "Trending"
@@ -201,6 +233,7 @@ export default function Home() {
           coverImage: podcastCover(podcast),
           totalBids: totals.get(podcast.id) ?? 0,
           trendingBids: trendingTotals.get(podcast.id) ?? 0,
+          createdAt: parseTimestamp(podcast.created_at),
         }))
         .sort((a, b) => b.totalBids - a.totalBids);
 
@@ -266,6 +299,54 @@ export default function Home() {
           })}
         </div>
 
+        <div className="mb-6 flex flex-col gap-3 sm:mb-8 sm:flex-row sm:items-stretch">
+          <div className="relative min-w-0 flex-1">
+            <label htmlFor="podcast-search" className="sr-only">
+              Search podcasts
+            </label>
+            <input
+              id="podcast-search"
+              type="text"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Search podcasts..."
+              autoComplete="off"
+              className="w-full rounded-2xl border border-slate-700 bg-slate-950/70 px-4 py-3 pr-12 text-sm text-white placeholder:text-slate-500 outline-none transition focus:border-emerald-400/60 focus:ring-2 focus:ring-emerald-400/40"
+            />
+            {searchTerm ? (
+              <button
+                type="button"
+                onClick={() => setSearchTerm("")}
+                aria-label="Clear search"
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full px-2 py-1 text-sm font-medium text-slate-400 transition hover:bg-slate-800 hover:text-white"
+              >
+                ×
+              </button>
+            ) : null}
+          </div>
+
+          <div className="sm:w-48">
+            <label htmlFor="podcast-sort" className="sr-only">
+              Sort podcasts
+            </label>
+            <select
+              id="podcast-sort"
+              value={sortBy}
+              onChange={(event) =>
+                setSortBy(event.target.value as SortBy)
+              }
+              className="h-full w-full appearance-none rounded-2xl border border-slate-700 bg-slate-950/70 bg-[length:1rem] bg-[right_0.9rem_center] bg-no-repeat px-4 py-3 pr-10 text-sm text-white outline-none transition focus:border-emerald-400/60 focus:ring-2 focus:ring-emerald-400/40"
+              style={{
+                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2394a3b8'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E")`,
+              }}
+            >
+              <option value="rank">Rank</option>
+              <option value="newest">Newest</option>
+              <option value="bids">Most Bids</option>
+            </select>
+          </div>
+        </div>
+
         {loading ? (
           <LoadingState />
         ) : error ? (
@@ -285,14 +366,18 @@ export default function Home() {
             {visiblePodcasts.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-900/50 px-6 py-12 text-center">
                 <p className="text-sm font-medium text-slate-200">
-                  {selectedCategory === "Trending"
-                    ? "No trending podcasts yet"
-                    : `No ${selectedCategory} podcasts yet`}
+                  {query
+                    ? "No podcasts match your search"
+                    : selectedCategory === "Trending"
+                      ? "No trending podcasts yet"
+                      : `No ${selectedCategory} podcasts yet`}
                 </p>
                 <p className="mt-2 text-sm text-slate-400">
-                  {selectedCategory === "Trending"
-                    ? "Bids from the last 24 hours will appear here first."
-                    : "Try another category, or submit a show to this one."}
+                  {query
+                    ? "Try a different name, description, or category."
+                    : selectedCategory === "Trending"
+                      ? "Bids from the last 24 hours will appear here first."
+                      : "Try another category, or submit a show to this one."}
                 </p>
               </div>
             ) : (
