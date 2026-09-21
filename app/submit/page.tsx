@@ -3,8 +3,19 @@
 import Link from "next/link";
 import { FormEvent, ReactNode, useState } from "react";
 
+const CATEGORIES = [
+  "Tech",
+  "Startups",
+  "AI",
+  "Founders",
+  "Indie Makers",
+] as const;
+
+type Category = (typeof CATEGORIES)[number];
+
 type FormValues = {
   name: string;
+  category: Category;
   url: string;
   email: string;
   amount: string;
@@ -15,6 +26,7 @@ type FormErrors = Partial<Record<keyof FormValues, string>>;
 
 const initialValues: FormValues = {
   name: "",
+  category: "Tech",
   url: "",
   email: "",
   amount: "",
@@ -43,6 +55,12 @@ function validate(values: FormValues): FormErrors {
 
   if (!name) {
     errors.name = "Podcast name is required.";
+  }
+
+  if (!values.category.trim()) {
+    errors.category = "Category is required.";
+  } else if (!CATEGORIES.includes(values.category as Category)) {
+    errors.category = "Select a valid category.";
   }
 
   if (!url) {
@@ -100,6 +118,7 @@ export default function SubmitPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: values.name.trim(),
+          category: values.category,
           url: values.url.trim(),
           email: values.email.trim(),
           amount: Number(values.amount),
@@ -218,6 +237,30 @@ export default function SubmitPage() {
                 disabled={submitting}
                 className={inputClass(Boolean(errors.name))}
               />
+            </Field>
+
+            <Field
+              id="category"
+              label="Category"
+              required
+              error={errors.category}
+            >
+              <select
+                id="category"
+                name="category"
+                value={values.category}
+                onChange={(event) =>
+                  updateField("category", event.target.value as Category)
+                }
+                disabled={submitting}
+                className={inputClass(Boolean(errors.category))}
+              >
+                {CATEGORIES.map((category) => (
+                  <option key={category} value={category}>
+                    {category}
+                  </option>
+                ))}
+              </select>
             </Field>
 
             <Field

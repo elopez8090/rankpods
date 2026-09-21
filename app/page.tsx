@@ -4,11 +4,27 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
+const CATEGORIES = [
+  "Tech",
+  "Startups",
+  "AI",
+  "Founders",
+  "Indie Makers",
+] as const;
+
+type Category = (typeof CATEGORIES)[number];
+type CategoryFilter = Category | "All" | "Trending";
+
+const TRENDING_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+const CATEGORY_TABS: CategoryFilter[] = ["Trending", ...CATEGORIES, "All"];
+
 type Podcast = {
   id: string;
   name?: string | null;
   title?: string | null;
   description?: string | null;
+  category?: string | null;
   url?: string | null;
   podcast_url?: string | null;
   website_url?: string | null;
@@ -22,15 +38,18 @@ type Bid = {
   id: string;
   podcast_id: string;
   amount: number | string | null;
+  created_at?: string | null;
 };
 
 type RankedPodcast = {
   id: string;
   name: string;
   description: string;
+  category: string;
   url: string;
   coverImage: string | null;
   totalBids: number;
+  trendingBids: number;
 };
 
 function podcastName(podcast: Podcast) {
@@ -54,6 +73,12 @@ function podcastCover(podcast: Podcast) {
     podcast.cover_url?.trim() ||
     null
   );
+}
+
+function bidTimestamp(bid: Bid) {
+  if (!bid.created_at) return 0;
+  const timestamp = Date.parse(bid.created_at);
+  return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
 function formatUsd(amount: number) {
@@ -95,8 +120,24 @@ function rankAccent(rank: number) {
 
 export default function Home() {
   const [podcasts, setPodcasts] = useState<RankedPodcast[]>([]);
+  const [selectedCategory, setSelectedCategory] =
+    useState<CategoryFilter>("All");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const visiblePodcasts =
+    selectedCategory === "Trending"
+      ? [...podcasts].sort((a, b) => b.trendingBids - a.trendingBids)
+      : selectedCategory === "All"
+        ? podcasts
+        : podcasts.filter((podcast) => podcast.category === selectedCategory);
+
+  const leaderboardTitle =
+    selectedCategory === "Trending"
+      ? "Trending This Week"
+      : selectedCategory === "All"
+        ? "All Podcasts"
+        : `${selectedCategory} Podcasts`;
 
   useEffect(() => {
     let cancelled = false;
@@ -105,10 +146,19 @@ export default function Home() {
       setLoading(true);
       setError(null);
 
-      const [podcastsResult, bidsResult] = await Promise.all([
-        supabase.from("podcasts").select("*"),
-        supabase.from("bids").select("*"),
-      ]);
+      const trendingSince = new Date(
+        Date.now() - TRENDING_WINDOW_MS
+      ).toISOString();
+
+      const [podcastsResult, bidsResult, trendingBidsResult] =
+        await Promise.all([
+          supabase.from("podcasts").select("*"),
+          supabase.from("bids").select("*"),
+          supabase
+            .from("bids")
+            .select("podcast_id, amount, created_at")
+            .gte("created_at", trendingSince),
+        ]);
 
       if (cancelled) return;
 
@@ -129,14 +179,28 @@ export default function Home() {
         totals.set(bid.podcast_id, current + Number(bid.amount ?? 0));
       }
 
+      const trendingTotals = new Map<string, number>();
+      const trendingBids = trendingBidsResult.error
+        ? ((bidsResult.data ?? []) as Bid[]).filter(
+            (bid) => bidTimestamp(bid) >= Date.now() - TRENDING_WINDOW_MS
+          )
+        : ((trendingBidsResult.data ?? []) as Bid[]);
+
+      for (const bid of trendingBids) {
+        const current = trendingTotals.get(bid.podcast_id) ?? 0;
+        trendingTotals.set(bid.podcast_id, current + Number(bid.amount ?? 0));
+      }
+
       const ranked = ((podcastsResult.data ?? []) as Podcast[])
         .map((podcast) => ({
           id: podcast.id,
           name: podcastName(podcast),
           description: podcast.description?.trim() || "No description yet.",
+          category: podcast.category?.trim() || "",
           url: podcastUrl(podcast),
           coverImage: podcastCover(podcast),
           totalBids: totals.get(podcast.id) ?? 0,
+          trendingBids: trendingTotals.get(podcast.id) ?? 0,
         }))
         .sort((a, b) => b.totalBids - a.totalBids);
 
@@ -181,6 +245,27 @@ export default function Home() {
           </Link>
         </header>
 
+        <div className="mb-6 flex flex-wrap gap-2 sm:mb-8">
+          {CATEGORY_TABS.map((category) => {
+            const isActive = category === selectedCategory;
+            return (
+              <button
+                key={category}
+                type="button"
+                onClick={() => setSelectedCategory(category)}
+                aria-pressed={isActive}
+                className={`rounded-full border px-4 py-2 text-sm transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-300 ${
+                  isActive
+                    ? "border-emerald-400/50 bg-emerald-400/15 font-bold text-emerald-200"
+                    : "border-slate-700 bg-slate-900/60 font-medium text-slate-400 hover:border-slate-500 hover:text-slate-200"
+                }`}
+              >
+                {category}
+              </button>
+            );
+          })}
+        </div>
+
         {loading ? (
           <LoadingState />
         ) : error ? (
@@ -193,15 +278,35 @@ export default function Home() {
         ) : podcasts.length === 0 ? (
           <EmptyState />
         ) : (
-          <ol className="flex flex-col gap-3 sm:gap-4">
-            {podcasts.map((podcast, index) => (
-              <PodcastRow
-                key={podcast.id}
-                podcast={podcast}
-                rank={index + 1}
-              />
-            ))}
-          </ol>
+          <section>
+            <h2 className="mb-4 text-xl font-semibold tracking-tight text-white sm:mb-5 sm:text-2xl">
+              {leaderboardTitle}
+            </h2>
+            {visiblePodcasts.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-900/50 px-6 py-12 text-center">
+                <p className="text-sm font-medium text-slate-200">
+                  {selectedCategory === "Trending"
+                    ? "No trending podcasts yet"
+                    : `No ${selectedCategory} podcasts yet`}
+                </p>
+                <p className="mt-2 text-sm text-slate-400">
+                  {selectedCategory === "Trending"
+                    ? "Bids from the last 24 hours will appear here first."
+                    : "Try another category, or submit a show to this one."}
+                </p>
+              </div>
+            ) : (
+              <ol className="flex flex-col gap-3 sm:gap-4">
+                {visiblePodcasts.map((podcast, index) => (
+                  <PodcastRow
+                    key={podcast.id}
+                    podcast={podcast}
+                    rank={index + 1}
+                  />
+                ))}
+              </ol>
+            )}
+          </section>
         )}
       </div>
     </div>

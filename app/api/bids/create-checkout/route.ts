@@ -2,13 +2,28 @@ import { NextRequest } from "next/server";
 import Stripe from "stripe";
 import { supabase } from "@/lib/supabase";
 
+const CATEGORIES = [
+  "Tech",
+  "Startups",
+  "AI",
+  "Founders",
+  "Indie Makers",
+] as const;
+
+type Category = (typeof CATEGORIES)[number];
+
 type CheckoutBody = {
   name?: unknown;
   url?: unknown;
   email?: unknown;
   amount?: unknown;
   description?: unknown;
+  category?: unknown;
 };
+
+function isCategory(value: string): value is Category {
+  return (CATEGORIES as readonly string[]).includes(value);
+}
 
 function jsonError(status: number, error: string) {
   return Response.json({ error }, { status });
@@ -52,11 +67,23 @@ export async function POST(request: NextRequest) {
   const url = asTrimmedString(body.url);
   const email = asTrimmedString(body.email);
   const description = asTrimmedString(body.description);
+  const categoryInput = asTrimmedString(body.category);
   const amount = Number(body.amount);
 
   if (!name || !url || !email) {
     return jsonError(400, "name, url, and email are required.");
   }
+
+  if (categoryInput && !isCategory(categoryInput)) {
+    return jsonError(
+      400,
+      "category must be one of: Tech, Startups, AI, Founders, Indie Makers."
+    );
+  }
+
+  const category: Category = isCategory(categoryInput)
+    ? categoryInput
+    : "Tech";
 
   if (!Number.isFinite(amount) || amount < 5) {
     return jsonError(400, "Amount must be at least $5.");
@@ -74,6 +101,7 @@ export async function POST(request: NextRequest) {
       podcast_url: url,
       creator_email: email,
       description: description || null,
+      category,
     })
     .select("id")
     .single();
