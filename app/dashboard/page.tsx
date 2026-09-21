@@ -7,6 +7,7 @@ import {
 } from "@/lib/creator-auth";
 import { supabase } from "@/lib/supabase";
 import { AddMoreBids } from "./add-more-bids";
+import { CopyDashboardLink } from "./copy-dashboard-link";
 import { LogoutButton } from "./logout-button";
 
 type PodcastRow = {
@@ -279,9 +280,12 @@ export default async function DashboardPage() {
         </section>
 
         <section className="rounded-3xl border border-slate-800 bg-slate-900/70 p-5 shadow-2xl shadow-black/30 ring-1 ring-slate-700/80 sm:p-8">
-          <h2 className="text-xl font-semibold tracking-tight text-white">
-            Bid history
-          </h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-semibold tracking-tight text-white">
+              Bid history
+            </h2>
+            <CopyDashboardLink />
+          </div>
           <p className="mt-1 text-sm text-slate-400">
             Newest bids first, with a running total after each bid.
           </p>
