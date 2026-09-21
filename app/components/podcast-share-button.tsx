@@ -15,7 +15,7 @@ export function PodcastShareButton({
   const [error, setError] = useState<string | null>(null);
 
   const shareText = `Check out ${podcastName} on RankPods - ${podcastUrl}`;
-  const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}`;
+  const twitterUrl = `https://x.com/intent/tweet?text=${encodeURIComponent(shareText)}`;
 
   async function handleCopy() {
     setError(null);
