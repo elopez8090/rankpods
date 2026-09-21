@@ -7,6 +7,7 @@ import {
 } from "@/lib/creator-auth";
 import { supabase } from "@/lib/supabase";
 import { AddMoreBids } from "./add-more-bids";
+import { LogoutButton } from "./logout-button";
 
 type PodcastRow = {
   id: string;
@@ -215,9 +216,12 @@ export default async function DashboardPage() {
           )}
 
           <div className="min-w-0">
-            <p className="mb-2 inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-xs font-medium uppercase tracking-[0.2em] text-emerald-300">
-              Creator dashboard
-            </p>
+            <div className="mb-2 flex items-start justify-between gap-3">
+              <p className="inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-xs font-medium uppercase tracking-[0.2em] text-emerald-300">
+                Creator dashboard
+              </p>
+              <LogoutButton />
+            </div>
             <h1 className="truncate text-3xl font-semibold tracking-tight text-white sm:text-4xl">
               {name}
             </h1>
