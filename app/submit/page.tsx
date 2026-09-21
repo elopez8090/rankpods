@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, ReactNode, useState } from "react";
+import { Suspense, FormEvent, ReactNode, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 const CATEGORIES = [
   "Tech",
@@ -201,6 +202,9 @@ export default function SubmitPage() {
           noValidate
           className="rounded-3xl border border-slate-800 bg-slate-900/70 p-5 shadow-2xl shadow-black/30 ring-1 ring-slate-700/80 sm:p-8"
         >
+          <Suspense fallback={null}>
+            <AuthErrorBanner />
+          </Suspense>
           {formError ? (
             <div
               role="alert"
@@ -370,6 +374,21 @@ export default function SubmitPage() {
           </p>
         </form>
       </div>
+    </div>
+  );
+}
+
+function AuthErrorBanner() {
+  const searchParams = useSearchParams();
+  const error = searchParams.get("error")?.trim();
+  if (!error) return null;
+
+  return (
+    <div
+      role="alert"
+      className="mb-6 rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200"
+    >
+      {error}
     </div>
   );
 }

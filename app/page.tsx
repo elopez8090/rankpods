@@ -270,12 +270,20 @@ export default function Home() {
             </p>
           </div>
 
-          <Link
-            href="/submit"
-            className="inline-flex h-12 shrink-0 items-center justify-center rounded-full bg-emerald-400 px-6 text-sm font-semibold text-slate-950 shadow-lg shadow-emerald-400/25 transition hover:bg-emerald-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-300"
-          >
-            Submit Your Podcast
-          </Link>
+          <div className="flex shrink-0 flex-col gap-3 sm:items-end">
+            <Link
+              href="/submit"
+              className="inline-flex h-12 items-center justify-center rounded-full bg-emerald-400 px-6 text-sm font-semibold text-slate-950 shadow-lg shadow-emerald-400/25 transition hover:bg-emerald-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-300"
+            >
+              Submit Your Podcast
+            </Link>
+            <Link
+              href="/manage"
+              className="inline-flex h-11 items-center justify-center rounded-full border border-slate-700 bg-slate-900/60 px-5 text-sm font-medium text-slate-300 transition hover:border-emerald-400/40 hover:bg-slate-900 hover:text-emerald-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-300"
+            >
+              Manage Your Podcast
+            </Link>
+          </div>
         </header>
 
         <div className="mb-6 flex flex-wrap gap-2 sm:mb-8">
