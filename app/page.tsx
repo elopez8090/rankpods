@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { PodcastShareButton } from "@/app/components/podcast-share-button";
 import { supabase } from "@/lib/supabase";
 
 const CATEGORIES = [
@@ -455,9 +456,20 @@ function PodcastRow({
           </div>
         </div>
         {podcast.url ? (
-          <p className="mt-2 truncate text-xs text-emerald-400/80 sm:text-sm">
-            Visit show →
-          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <a
+              href={podcast.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="truncate text-xs text-emerald-400/80 sm:text-sm"
+            >
+              Visit show →
+            </a>
+            <PodcastShareButton
+              podcastName={podcast.name}
+              podcastUrl={podcast.url}
+            />
+          </div>
         ) : null}
       </div>
     </>
@@ -465,23 +477,14 @@ function PodcastRow({
 
   const className = `group relative flex items-start gap-3 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/70 p-4 ring-1 transition hover:border-emerald-400/40 hover:bg-slate-900 sm:items-center sm:gap-5 sm:p-5 ${accent.ring}`;
 
-  if (!podcast.url) {
-    return <li className={className}>{content}</li>;
-  }
-
   return (
-    <li>
-      <a
-        href={podcast.url}
-        target="_blank"
-        rel="noopener noreferrer"
-        className={`${className} cursor-pointer`}
-      >
+    <li className={className}>
+      {podcast.url ? (
         <div
           className={`pointer-events-none absolute inset-y-0 left-0 w-24 bg-gradient-to-r ${accent.glow} to-transparent opacity-80`}
         />
-        {content}
-      </a>
+      ) : null}
+      {content}
     </li>
   );
 }
