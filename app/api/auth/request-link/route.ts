@@ -14,7 +14,7 @@ import { supabase } from "@/lib/supabase";
 
 export const runtime = "nodejs";
 
-const MAGIC_LINK_BASE = "https://rankpods.lol/verify";
+const MAGIC_LINK_BASE = (process.env.NEXT_PUBLIC_SITE_URL || "https://rankpods.lol") + "/verify";
 const PODCAST_COLUMNS = "id, name, creator_email, created_at";
 
 function firstRow<T>(
