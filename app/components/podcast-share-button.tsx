@@ -34,12 +34,12 @@ export function PodcastShareButton({
   }
 
   return (
-    <div className="flex flex-col gap-1">
-      <div className="inline-flex gap-2">
+    <div className="flex min-w-0 flex-col gap-1">
+      <div className="flex min-w-0 flex-wrap gap-2">
         <button
           type="button"
           onClick={handleCopy}
-          className="text-sm text-emerald-300 hover:text-emerald-200"
+          className="shrink-0 text-sm text-emerald-300 hover:text-emerald-200"
         >
           {copied ? "Copied!" : "Copy"}
         </button>
@@ -47,9 +47,9 @@ export function PodcastShareButton({
           href={twitterUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-sm text-emerald-300 hover:text-emerald-200"
+          className="shrink-0 text-sm text-emerald-300 hover:text-emerald-200"
         >
-          Share on X
+          Share
         </a>
       </div>
       {error ? (
