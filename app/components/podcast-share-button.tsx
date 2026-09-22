@@ -34,7 +34,7 @@ export function PodcastShareButton({
   }
 
   return (
-    <div className="inline-flex flex-col gap-1">
+    <div className="flex flex-col gap-1">
       <div className="inline-flex gap-2">
         <button
           type="button"
