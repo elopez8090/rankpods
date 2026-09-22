@@ -17,6 +17,8 @@ const CATEGORIES = [
 
 type Category = (typeof CATEGORIES)[number];
 
+const SPONSOR_LOGO_BUCKET = "sponsor-logos";
+
 type CheckoutBody = {
   name?: unknown;
   url?: unknown;
@@ -25,6 +27,11 @@ type CheckoutBody = {
   description?: unknown;
   category?: unknown;
   podcastId?: unknown;
+};
+
+type ParsedCheckoutRequest = {
+  body: CheckoutBody;
+  sponsorLogo: File | null;
 };
 
 function isCategory(value: string): value is Category {
@@ -36,7 +43,86 @@ function jsonError(status: number, error: string) {
 }
 
 function asTrimmedString(value: unknown) {
-  return typeof value === "string" ? value.trim() : "";
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return "";
+}
+
+function asSponsorLogoFile(value: FormDataEntryValue | null): File | null {
+  if (!(value instanceof File) || value.size <= 0) return null;
+  return value;
+}
+
+function sponsorLogoStoragePath(filename: string) {
+  const safeName = filename.replace(/[^\w.\-]+/g, "_").replace(/^\.+/, "") || "logo";
+  return `sponsor-logos/${Date.now()}-${safeName}`;
+}
+
+async function uploadSponsorLogo(
+  file: File
+): Promise<{ url: string } | { error: string }> {
+  const storagePath = sponsorLogoStoragePath(file.name);
+
+  try {
+    const { error: uploadError } = await supabase.storage
+      .from(SPONSOR_LOGO_BUCKET)
+      .upload(storagePath, file, {
+        cacheControl: "3600",
+        contentType: file.type || "application/octet-stream",
+        upsert: false,
+      });
+
+    if (uploadError) {
+      return {
+        error: uploadError.message || "Unable to upload sponsor logo.",
+      };
+    }
+
+    const { data } = supabase.storage
+      .from(SPONSOR_LOGO_BUCKET)
+      .getPublicUrl(storagePath);
+
+    const publicUrl = data.publicUrl?.trim();
+    if (!publicUrl) {
+      return { error: "Unable to get a public URL for the sponsor logo." };
+    }
+
+    return { url: publicUrl };
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error
+          ? error.message
+          : "Unable to upload sponsor logo.",
+    };
+  }
+}
+
+async function parseCheckoutBody(
+  request: NextRequest
+): Promise<ParsedCheckoutRequest> {
+  const contentType = request.headers.get("content-type") || "";
+
+  if (contentType.includes("multipart/form-data")) {
+    const form = await request.formData();
+    return {
+      body: {
+        name: form.get("name") ?? undefined,
+        url: form.get("url") ?? undefined,
+        email: form.get("email") ?? undefined,
+        amount: form.get("amount") ?? undefined,
+        description: form.get("description") ?? undefined,
+        category: form.get("category") ?? undefined,
+        podcastId: form.get("podcastId") ?? undefined,
+      },
+      sponsorLogo: asSponsorLogoFile(form.get("sponsorLogo")),
+    };
+  }
+
+  return {
+    body: (await request.json()) as CheckoutBody,
+    sponsorLogo: null,
+  };
 }
 
 function getAppUrl(request: NextRequest) {
@@ -62,11 +148,14 @@ function getAppUrl(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   let body: CheckoutBody;
+  let sponsorLogo: File | null = null;
 
   try {
-    body = (await request.json()) as CheckoutBody;
+    const parsed = await parseCheckoutBody(request);
+    body = parsed.body;
+    sponsorLogo = parsed.sponsorLogo;
   } catch {
-    return jsonError(400, "Invalid JSON body.");
+    return jsonError(400, "Invalid request body.");
   }
 
   const name = asTrimmedString(body.name);
@@ -139,6 +228,18 @@ export async function POST(request: NextRequest) {
       ? categoryInput
       : "Tech";
 
+    let sponsorLogoUrl: string | null = null;
+    if (sponsorLogo) {
+      const uploaded = await uploadSponsorLogo(sponsorLogo);
+      if ("error" in uploaded) {
+        return jsonError(
+          500,
+          uploaded.error || "Unable to upload sponsor logo."
+        );
+      }
+      sponsorLogoUrl = uploaded.url;
+    }
+
     const { data: podcast, error: insertError } = await supabase
       .from("podcasts")
       .insert({
@@ -147,6 +248,7 @@ export async function POST(request: NextRequest) {
         creator_email: email,
         description: description || null,
         category,
+        sponsor_logo_url: sponsorLogoUrl,
       })
       .select("id")
       .single();

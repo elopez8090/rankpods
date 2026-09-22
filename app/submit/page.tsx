@@ -1,7 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense, FormEvent, ReactNode, useState } from "react";
+import {
+  ChangeEvent,
+  FormEvent,
+  ReactNode,
+  Suspense,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { useSearchParams } from "next/navigation";
 
 const CATEGORIES = [
@@ -23,7 +31,7 @@ type FormValues = {
   description: string;
 };
 
-type FormErrors = Partial<Record<keyof FormValues, string>>;
+type FormErrors = Partial<Record<keyof FormValues | "sponsorLogo", string>>;
 
 const initialValues: FormValues = {
   name: "",
@@ -47,7 +55,11 @@ function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
-function validate(values: FormValues): FormErrors {
+function isImageFile(file: File) {
+  return file.type.startsWith("image/");
+}
+
+function validate(values: FormValues, sponsorLogo: File | null): FormErrors {
   const errors: FormErrors = {};
   const name = values.name.trim();
   const url = values.url.trim();
@@ -82,15 +94,38 @@ function validate(values: FormValues): FormErrors {
     errors.amount = "Minimum bid is $5.";
   }
 
+  if (sponsorLogo && !isImageFile(sponsorLogo)) {
+    errors.sponsorLogo = "Logo must be an image file.";
+  }
+
   return errors;
 }
 
 export default function SubmitPage() {
   const [values, setValues] = useState<FormValues>(initialValues);
+  const [sponsorLogo, setSponsorLogo] = useState<File | null>(null);
+  const [sponsorLogoPreview, setSponsorLogoPreview] = useState<string | null>(
+    null
+  );
   const [errors, setErrors] = useState<FormErrors>({});
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const sponsorLogoInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!sponsorLogo) {
+      setSponsorLogoPreview(null);
+      return;
+    }
+
+    const objectUrl = URL.createObjectURL(sponsorLogo);
+    setSponsorLogoPreview(objectUrl);
+
+    return () => {
+      URL.revokeObjectURL(objectUrl);
+    };
+  }, [sponsorLogo]);
 
   function updateField<K extends keyof FormValues>(field: K, value: FormValues[K]) {
     setValues((current) => ({ ...current, [field]: value }));
@@ -107,24 +142,30 @@ export default function SubmitPage() {
     setFormError(null);
     setSuccessMessage(null);
 
-    const nextErrors = validate(values);
+    const nextErrors = validate(values, sponsorLogo);
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
 
     setSubmitting(true);
 
     try {
+      const formData = new FormData();
+      formData.append("name", values.name.trim());
+      formData.append("category", values.category);
+      formData.append("url", values.url.trim());
+      formData.append("email", values.email.trim());
+      formData.append("amount", String(Number(values.amount)));
+      const description = values.description.trim();
+      if (description) {
+        formData.append("description", description);
+      }
+      if (sponsorLogo) {
+        formData.append("sponsorLogo", sponsorLogo);
+      }
+
       const response = await fetch("/api/bids/create-checkout", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: values.name.trim(),
-          category: values.category,
-          url: values.url.trim(),
-          email: values.email.trim(),
-          amount: Number(values.amount),
-          description: values.description.trim() || undefined,
-        }),
+        body: formData,
       });
 
       const payload = (await response.json().catch(() => null)) as
@@ -156,6 +197,10 @@ export default function SubmitPage() {
           "Your podcast was submitted. Complete checkout to place your bid."
       );
       setValues(initialValues);
+      setSponsorLogo(null);
+      if (sponsorLogoInputRef.current) {
+        sponsorLogoInputRef.current.value = "";
+      }
     } catch (error) {
       setFormError(
         error instanceof Error
@@ -265,6 +310,40 @@ export default function SubmitPage() {
                   </option>
                 ))}
               </select>
+            </Field>
+
+            <Field
+              id="sponsorLogo"
+              label="Company/Sponsor Logo (optional)"
+              error={errors.sponsorLogo}
+            >
+              <input
+                ref={sponsorLogoInputRef}
+                id="sponsorLogo"
+                name="sponsorLogo"
+                type="file"
+                accept="image/*"
+                disabled={submitting}
+                onChange={(event: ChangeEvent<HTMLInputElement>) => {
+                  const file = event.target.files?.[0] ?? null;
+                  setSponsorLogo(file);
+                  setErrors((current) => {
+                    if (!current.sponsorLogo) return current;
+                    const next = { ...current };
+                    delete next.sponsorLogo;
+                    return next;
+                  });
+                }}
+                className={`${inputClass(Boolean(errors.sponsorLogo))} file:mr-4 file:rounded-full file:border-0 file:bg-emerald-400/15 file:px-4 file:py-2 file:text-sm file:font-medium file:text-emerald-200`}
+              />
+              {sponsorLogoPreview ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={sponsorLogoPreview}
+                  alt="Selected company or sponsor logo"
+                  className="mt-3 h-20 w-20 rounded-2xl border border-slate-700 bg-slate-950/70 object-cover"
+                />
+              ) : null}
             </Field>
 
             <Field
